@@ -29,7 +29,7 @@ def _ensure_skill_dirs(skill_dirs: object) -> list[KaosPath]:
         return []
     if type(skill_dirs) == list:
         return skill_dirs
-    if isinstance(skill_dirs, Iterable):
+    if isinstance(skill_dirs, Iterable) and not isinstance(skill_dirs, (str, bytes)):
         return [i for i in skill_dirs]
     return [skill_dirs]
 
