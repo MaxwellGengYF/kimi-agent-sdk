@@ -57,6 +57,7 @@ class Session:
         thinking: bool = False,
         # Run mode
         yolo: bool = False,
+        plan_mode: bool = False,
         # Extensions
         agent_file: Path | None = None,
         mcp_configs: list[MCPConfig] | list[dict[str, Any]] | None = None,
@@ -110,6 +111,7 @@ class Session:
             model_name=model,
             thinking=thinking,
             yolo=yolo,
+            plan_mode=plan_mode,
             agent_file=agent_file,
             mcp_configs=mcp_configs,
             skills_dirs=skill_dirs_list,
@@ -130,6 +132,7 @@ class Session:
         thinking: bool = False,
         # Run mode
         yolo: bool = False,
+        plan_mode: bool = False,
         # Extensions
         agent_file: Path | None = None,
         mcp_configs: list[MCPConfig] | list[dict[str, Any]] | None = None,
@@ -184,6 +187,7 @@ class Session:
             model_name=model,
             thinking=thinking,
             yolo=yolo,
+            plan_mode=plan_mode,
             agent_file=agent_file,
             mcp_configs=mcp_configs,
             skills_dirs=skill_dirs_list,
