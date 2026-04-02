@@ -23,6 +23,15 @@ def _ensure_type(name: str, value: object, expected: type) -> None:
     if not isinstance(value, expected):
         raise TypeError(f"{name} must be {expected.__name__}, got {type(value).__name__}")
 
+def _ensure_skill_dirs(skill_dirs: object) -> list[KaosPath]:
+    from collections.abc import Iterable
+    if skill_dirs is None:
+        return []
+    if type(skill_dirs) == list:
+        return skill_dirs
+    if isinstance(skill_dirs, Iterable):
+        return [i for i in skill_dirs]
+    return [skill_dirs]
 
 class Session:
     """
@@ -51,7 +60,7 @@ class Session:
         # Extensions
         agent_file: Path | None = None,
         mcp_configs: list[MCPConfig] | list[dict[str, Any]] | None = None,
-        skills_dir: KaosPath | None = None,
+        skills_dirs: list[KaosPath] | KaosPath | None = None,
         # Loop control
         max_steps_per_turn: int | None = None,
         max_retries_per_step: int | None = None,
@@ -69,7 +78,7 @@ class Session:
             yolo: Automatically approve all approval requests.
             agent_file: Agent specification file path.
             mcp_configs: MCP server configurations.
-            skills_dir: Skills directory (KaosPath).
+            skills_dirs: Skills directories (KaosPath or list of KaosPath).
             max_steps_per_turn: Maximum number of steps in one turn.
             max_retries_per_step: Maximum number of retries per step.
             max_ralph_iterations: Extra iterations in Ralph mode (-1 for unlimited).
@@ -91,9 +100,9 @@ class Session:
         else:
             _ensure_type("work_dir", work_dir, KaosPath)
             work_dir_path = work_dir
-
-        if skills_dir is not None:
-            _ensure_type("skills_dir", skills_dir, KaosPath)
+        skill_dirs_list = _ensure_skill_dirs(skills_dirs)
+        for i, sd in enumerate(skill_dirs_list):
+            _ensure_type(f"skills_dirs[{i}]", sd, KaosPath)
         cli_session = await CliSession.create(work_dir_path, session_id)
         cli = await KimiCLI.create(
             cli_session,
@@ -103,7 +112,7 @@ class Session:
             yolo=yolo,
             agent_file=agent_file,
             mcp_configs=mcp_configs,
-            skills_dir=skills_dir,
+            skills_dirs=skill_dirs_list,
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
             max_ralph_iterations=max_ralph_iterations,
@@ -124,7 +133,7 @@ class Session:
         # Extensions
         agent_file: Path | None = None,
         mcp_configs: list[MCPConfig] | list[dict[str, Any]] | None = None,
-        skills_dir: KaosPath | None = None,
+        skills_dirs: list[KaosPath] | KaosPath | None = None,
         # Loop control
         max_steps_per_turn: int | None = None,
         max_retries_per_step: int | None = None,
@@ -142,7 +151,7 @@ class Session:
             yolo: Automatically approve all approval requests.
             agent_file: Agent specification file path.
             mcp_configs: MCP server configurations.
-            skills_dir: Skills directory (KaosPath).
+            skills_dirs: Skills directories (KaosPath or list of KaosPath).
             max_steps_per_turn: Maximum number of steps in one turn.
             max_retries_per_step: Maximum number of retries per step.
             max_ralph_iterations: Extra iterations in Ralph mode (-1 for unlimited).
@@ -160,8 +169,9 @@ class Session:
                 connected.
         """
         _ensure_type("work_dir", work_dir, KaosPath)
-        if skills_dir is not None:
-            _ensure_type("skills_dir", skills_dir, KaosPath)
+        skill_dirs_list = _ensure_skill_dirs(skills_dirs)
+        for i, sd in enumerate(skill_dirs_list):
+            _ensure_type(f"skills_dirs[{i}]", sd, KaosPath)
         if session_id is None:
             cli_session = await CliSession.continue_(work_dir)
         else:
@@ -176,7 +186,7 @@ class Session:
             yolo=yolo,
             agent_file=agent_file,
             mcp_configs=mcp_configs,
-            skills_dir=skills_dir,
+            skills_dirs=skill_dirs_list,
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
             max_ralph_iterations=max_ralph_iterations,
