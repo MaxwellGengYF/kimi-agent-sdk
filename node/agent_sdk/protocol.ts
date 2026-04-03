@@ -16,13 +16,15 @@ import {
   type ExternalTool,
   type ToolCallRequest,
   type ToolReturnValue,
+  type HookRequest,
+  type HookSubscription,
   SetPlanModeResultSchema,
   type SetPlanModeResult,
 } from "./schema";
 import { TransportError, ProtocolError, CliError } from "./errors";
 import { log } from "./logger";
 
-const PROTOCOL_VERSION = "1.5";
+const PROTOCOL_VERSION = "1.7";
 const SDK_NAME = "kimi-agent-sdk";
 
 declare const __SDK_VERSION__: string;
@@ -31,6 +33,23 @@ const SDK_VERSION = typeof __SDK_VERSION__ !== "undefined" ? __SDK_VERSION__ : "
 export interface ClientInfo {
   name: string;
   version: string;
+}
+
+/** Handler for a single wire hook — called when the matching subscription fires */
+export type HookHandler = (request: HookRequest) => Promise<{ action: "allow" | "block"; reason?: string }>;
+
+/** Hook registration: subscription config + handler */
+export interface HookRegistration {
+  /** Unique ID for this subscription */
+  id: string;
+  /** Which lifecycle event to subscribe to */
+  event: string;
+  /** Regex filter. Empty matches everything */
+  matcher?: string;
+  /** Timeout in seconds */
+  timeout?: number;
+  /** Handler called when this hook fires */
+  handler: HookHandler;
 }
 
 export interface ClientOptions {
@@ -45,6 +64,8 @@ export interface ClientOptions {
   agentFile?: string;
   clientInfo?: ClientInfo;
   skillsDir?: string;
+  /** Hook registrations — each binds a subscription to a handler (Wire 1.7) */
+  hooks?: HookRegistration[];
 }
 
 // Prompt Stream
@@ -118,6 +139,7 @@ export class ProtocolClient {
   private pushEvent: ((event: StreamEvent) => void) | null = null;
   private finishEvents: (() => void) | null = null;
   private externalToolHandlers = new Map<string, ExternalTool["handler"]>();
+  private hookHandlers = new Map<string, HookHandler>();
 
   get isRunning(): boolean {
     return this.process !== null && this.process.exitCode === null;
@@ -168,8 +190,14 @@ export class ProtocolClient {
       }
     }
 
+    // Register hook handlers
+    const hookSubscriptions: HookSubscription[] | undefined = options.hooks?.map((h) => {
+      this.hookHandlers.set(h.id, h.handler);
+      return { id: h.id, event: h.event, matcher: h.matcher ?? "", timeout: h.timeout ?? 30 };
+    });
+
     // Send initialize request
-    const initResult = await this.sendInitialize(options.externalTools, options.clientInfo);
+    const initResult = await this.sendInitialize(options.externalTools, options.clientInfo, hookSubscriptions);
     return initResult;
   }
 
@@ -289,7 +317,7 @@ export class ProtocolClient {
     return this.sendRequest("steer", { user_input: content }).then(() => {});
   }
 
-  private async sendInitialize(externalTools?: ExternalTool[], clientInfo?: ClientInfo): Promise<InitializeResult> {
+  private async sendInitialize(externalTools?: ExternalTool[], clientInfo?: ClientInfo, hooks?: HookSubscription[]): Promise<InitializeResult> {
     let clientName = `${SDK_NAME}/${SDK_VERSION}`;
     if (clientInfo?.name && clientInfo?.version) {
       clientName += ` ${clientInfo.name}/${clientInfo.version}`;
@@ -312,6 +340,15 @@ export class ProtocolClient {
         name: tool.name,
         description: tool.description,
         parameters: tool.parameters,
+      }));
+    }
+
+    if (hooks && hooks.length > 0) {
+      params.hooks = hooks.map((h) => ({
+        id: h.id,
+        event: h.event,
+        matcher: h.matcher ?? "",
+        timeout: h.timeout ?? 30,
       }));
     }
 
@@ -453,7 +490,12 @@ export class ProtocolClient {
       return;
     }
 
-    // For other request types (ApprovalRequest), emit as event
+    if (p.type === "HookRequest") {
+      this.handleHookRequest(requestId, p.payload as HookRequest);
+      return;
+    }
+
+    // For other request types (ApprovalRequest, QuestionRequest), emit as event
     const result = parseRequestPayload(p.type, p.payload);
     if (result.ok) {
       this.pushEvent?.(result.value);
@@ -501,6 +543,41 @@ export class ProtocolClient {
       result: {
         tool_call_id: request.id,
         return_value: returnValue,
+      },
+    });
+  }
+
+  private async handleHookRequest(requestId: string, request: HookRequest): Promise<void> {
+    let action: "allow" | "block" = "allow";
+    let reason = "";
+
+    // Dispatch by subscription_id to the registered handler
+    const handler = this.hookHandlers.get(request.subscription_id);
+    if (handler) {
+      try {
+        const result = await handler(request);
+        action = result.action;
+        reason = result.reason ?? "";
+      } catch (err) {
+        log.protocol("Hook handler error for subscription %s: %O", request.subscription_id, err);
+        // Fail-open: allow on handler error
+        action = "allow";
+      }
+    } else {
+      // No handler for this subscription — emit as event so Turn iterator can see it
+      const parsed = parseRequestPayload("HookRequest", request);
+      if (parsed.ok) {
+        this.pushEvent?.(parsed.value);
+      }
+    }
+
+    this.writeLine({
+      jsonrpc: "2.0",
+      id: requestId,
+      result: {
+        request_id: request.id,
+        action,
+        reason,
       },
     });
   }
