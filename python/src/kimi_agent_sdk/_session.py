@@ -66,6 +66,7 @@ class Session:
         max_steps_per_turn: int | None = None,
         max_retries_per_step: int | None = None,
         max_ralph_iterations: int | None = None,
+        tool_call_failed_list: list[tuple[str, str, str, str]]  | None = None, # Add by maxwell
     ) -> Session:
         """
         Create a new Session instance.
@@ -118,6 +119,7 @@ class Session:
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
             max_ralph_iterations=max_ralph_iterations,
+            tool_call_failed_list=tool_call_failed_list
         )
         return Session(cli)
 
@@ -141,6 +143,7 @@ class Session:
         max_steps_per_turn: int | None = None,
         max_retries_per_step: int | None = None,
         max_ralph_iterations: int | None = None,
+        tool_call_failed_list: list[tuple[str, str, str, str]]  | None = None, # Add by maxwell
     ) -> Session | None:
         """
         Resume an existing session.
@@ -194,6 +197,7 @@ class Session:
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
             max_ralph_iterations=max_ralph_iterations,
+            tool_call_failed_list=tool_call_failed_list
         )
         return Session(cli)
 
