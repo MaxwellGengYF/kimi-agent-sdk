@@ -4,7 +4,7 @@ import asyncio
 import inspect
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from kaos.path import KaosPath
 from kimi_cli.app import KimiCLI
@@ -12,6 +12,7 @@ from kimi_cli.config import Config
 from kimi_cli.session import Session as CliSession
 from kimi_cli.soul import StatusSnapshot
 from kimi_cli.wire.types import ContentPart, WireMessage
+from kimi_cli.soul.agent import BuiltinSystemPromptArgs
 
 from kimi_agent_sdk._exception import SessionStateError
 
@@ -67,6 +68,7 @@ class Session:
         max_retries_per_step: int | None = None,
         max_ralph_iterations: int | None = None,
         tool_call_failed_list: list[tuple[str, str, str, str]]  | None = None, # Add by maxwell
+        custom_system_prompt : Callable[[BuiltinSystemPromptArgs], str] | None = None, # Add by maxwell
     ) -> Session:
         """
         Create a new Session instance.
@@ -119,7 +121,8 @@ class Session:
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
             max_ralph_iterations=max_ralph_iterations,
-            tool_call_failed_list=tool_call_failed_list
+            tool_call_failed_list=tool_call_failed_list,
+            custom_system_prompt=custom_system_prompt,
         )
         return Session(cli)
 
@@ -144,6 +147,7 @@ class Session:
         max_retries_per_step: int | None = None,
         max_ralph_iterations: int | None = None,
         tool_call_failed_list: list[tuple[str, str, str, str]]  | None = None, # Add by maxwell
+        custom_system_prompt : Callable[[BuiltinSystemPromptArgs], str] | None = None, # Add by maxwell
     ) -> Session | None:
         """
         Resume an existing session.
@@ -197,7 +201,8 @@ class Session:
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
             max_ralph_iterations=max_ralph_iterations,
-            tool_call_failed_list=tool_call_failed_list
+            tool_call_failed_list=tool_call_failed_list,
+            custom_system_prompt=custom_system_prompt,
         )
         return Session(cli)
 
