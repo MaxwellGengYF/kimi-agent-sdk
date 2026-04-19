@@ -10,7 +10,8 @@ export const DEFAULT_EXTENSION_CONFIG: ExtensionConfig = {
   useCtrlEnterToSend: false,
   enableNewConversationShortcut: false,
   environmentVariables: {},
-  alwaysExpandThinking: false,
+  showThinkingContent: true,
+  showThinkingExpanded: true,
   version: "",
 };
 

@@ -66,14 +66,14 @@ function resolveSubagentTarget(
   steps: UIStep[],
   payload: SubagentEvent,
 ): { steps: UIStep[]; event: { type: string; payload: any }; toolItem: UIStepItem & { type: "tool_use" } } | null {
-  const { task_tool_call_id, event } = payload;
+  const { parent_tool_call_id, event } = payload;
 
   // Nested SubagentEvent
   if (event.type === "SubagentEvent") {
     return resolveSubagentTarget(steps, event.payload as SubagentEvent);
   }
 
-  const toolItem = findToolUseItem(steps, task_tool_call_id);
+  const toolItem = findToolUseItem(steps, parent_tool_call_id);
   if (!toolItem) {
     return null;
   }
@@ -238,7 +238,7 @@ function isTaskToolResult(steps: UIStep[] | undefined, toolCallId: string): bool
     return false;
   }
   const toolItem = findToolUseItem(steps, toolCallId);
-  return toolItem?.call.name === "Task";
+  return toolItem?.call.name === "Task" || toolItem?.call.name === "Agent";
 }
 
 function handlePreflightError(draft: ChatState, code: string, message: string): void {

@@ -1,9 +1,9 @@
 {
   "name": "kimi-code",
   "publisher": "moonshot-ai",
-  "displayName": "Kimi Code (Technical Preview)",
+  "displayName": "Kimi Code",
   "description": "Official Kimi Code plugin for VS Code",
-  "version": "0.4.5",
+  "version": "0.5.5",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -82,10 +82,15 @@
             "type": "string"
           }
         },
-        "kimi.alwaysExpandThinking": {
+        "kimi.showThinkingContent": {
           "type": "boolean",
-          "default": false,
-          "description": "Auto-expand thinking/reasoning sections so you can see the AI's thought process in real-time"
+          "default": true,
+          "description": "Show thinking/reasoning content in the chat UI"
+        },
+        "kimi.showThinkingExpanded": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-expand thinking/reasoning sections when shown (requires 'Show Thinking Content' to be enabled)"
         },
         "kimi.editorContext": {
           "type": "string",
