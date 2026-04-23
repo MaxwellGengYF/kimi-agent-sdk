@@ -24,16 +24,6 @@ def _ensure_type(name: str, value: object, expected: type) -> None:
     if not isinstance(value, expected):
         raise TypeError(f"{name} must be {expected.__name__}, got {type(value).__name__}")
 
-def _ensure_skill_dirs(skill_dirs: object) -> list[KaosPath]:
-    from collections.abc import Iterable
-    if skill_dirs is None:
-        return []
-    if type(skill_dirs) == list:
-        return skill_dirs
-    if isinstance(skill_dirs, Iterable) and not isinstance(skill_dirs, (str, bytes)):
-        return [i for i in skill_dirs]
-    return [skill_dirs]
-
 def _resolve_skills_dirs(
     skills_dir: KaosPath | None,
     skills_dirs: list[KaosPath] | None,
@@ -136,7 +126,6 @@ class Session:
             plan_mode=plan_mode,
             agent_file=agent_file,
             mcp_configs=mcp_configs,
-            skills_dirs=skill_dirs_list,
             skills_dirs=resolved_skills_dirs,
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
@@ -202,9 +191,6 @@ class Session:
                 connected.
         """
         _ensure_type("work_dir", work_dir, KaosPath)
-        skill_dirs_list = _ensure_skill_dirs(skills_dirs)
-        for i, sd in enumerate(skill_dirs_list):
-            _ensure_type(f"skills_dirs[{i}]", sd, KaosPath)
         resolved_skills_dirs = _resolve_skills_dirs(skills_dir, skills_dirs)
         if session_id is None:
             cli_session = await CliSession.continue_(work_dir)
@@ -221,7 +207,6 @@ class Session:
             plan_mode=plan_mode,
             agent_file=agent_file,
             mcp_configs=mcp_configs,
-            skills_dirs=skill_dirs_list,
             skills_dirs=resolved_skills_dirs,
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
