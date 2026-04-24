@@ -1,6 +1,6 @@
 [project]
 name = "kimi-agent-sdk-x"
-version = "0.0.7a"
+version = "0.0.8"
 description = "A Python SDK for Kimi Agent (Kimi CLI)."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -19,8 +19,8 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
-    "kimi-cli-x>=1.38",
-    "kosong>=0.50.0",
+    "kimi-cli-x>=1.39",
+    "kosong-x>=0.52.0",
 ]
 
 [project.urls]
