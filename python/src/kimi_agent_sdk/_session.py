@@ -120,11 +120,15 @@ class Session:
             work_dir_path = work_dir
         resolved_skills_dirs = _resolve_skills_dirs(skills_dir, skills_dirs)
         cli_session = await CliSession.create(work_dir_path, session_id)
+        llm: LLM | None = None
+        if chat_provider is not None:
+            llm = LLM(chat_provider, 0, set())
         cli = await KimiCLI.create(
             cli_session,
             config=config,
             model_name=model,
             thinking=thinking,
+            llm=llm,
             yolo=yolo,
             plan_mode=plan_mode,
             agent_file=agent_file,
@@ -136,12 +140,6 @@ class Session:
             tool_call_failed_list=tool_call_failed_list,
             custom_system_prompt=custom_system_prompt,
         )
-        if chat_provider is not None:
-            cli._runtime.llm = LLM(
-                chat_provider=chat_provider,
-                max_context_size=128000,
-                capabilities=set(),
-            )
         return Session(cli)
 
     @staticmethod
@@ -208,11 +206,15 @@ class Session:
             cli_session = await CliSession.find(work_dir, session_id)
         if cli_session is None:
             return None
+        llm: LLM | None = None
+        if chat_provider is not None:
+            llm = LLM(chat_provider, 0, set())
         cli = await KimiCLI.create(
             cli_session,
             config=config,
             model_name=model,
             thinking=thinking,
+            llm=llm,
             yolo=yolo,
             plan_mode=plan_mode,
             agent_file=agent_file,
@@ -224,12 +226,6 @@ class Session:
             tool_call_failed_list=tool_call_failed_list,
             custom_system_prompt=custom_system_prompt,
         )
-        if chat_provider is not None:
-            cli._runtime.llm = LLM(
-                chat_provider=chat_provider,
-                max_context_size=128000,
-                capabilities=set(),
-            )
         return Session(cli)
 
     @property
