@@ -9,10 +9,12 @@ from typing import TYPE_CHECKING, Any, Callable
 from kaos.path import KaosPath
 from kimi_cli.app import KimiCLI
 from kimi_cli.config import Config
+from kimi_cli.llm import LLM
 from kimi_cli.session import Session as CliSession
 from kimi_cli.soul import StatusSnapshot
 from kimi_cli.wire.types import ContentPart, WireMessage
 from kimi_cli.soul.agent import BuiltinSystemPromptArgs
+from kosong.chat_provider import ChatProvider
 
 from kimi_agent_sdk._exception import SessionStateError
 
@@ -79,6 +81,7 @@ class Session:
         max_ralph_iterations: int | None = None,
         tool_call_failed_list: list[tuple[str, str, str, str]]  | None = None, # Add by maxwell
         custom_system_prompt : Callable[[BuiltinSystemPromptArgs], str] | None = None, # Add by maxwell
+        chat_provider: ChatProvider | None = None,
     ) -> Session:
         """
         Create a new Session instance.
@@ -133,6 +136,12 @@ class Session:
             tool_call_failed_list=tool_call_failed_list,
             custom_system_prompt=custom_system_prompt,
         )
+        if chat_provider is not None:
+            cli._runtime.llm = LLM(
+                chat_provider=chat_provider,
+                max_context_size=128000,
+                capabilities=set(),
+            )
         return Session(cli)
 
     @staticmethod
@@ -158,6 +167,7 @@ class Session:
         max_ralph_iterations: int | None = None,
         tool_call_failed_list: list[tuple[str, str, str, str]]  | None = None, # Add by maxwell
         custom_system_prompt : Callable[[BuiltinSystemPromptArgs], str] | None = None, # Add by maxwell
+        chat_provider: ChatProvider | None = None,
     ) -> Session | None:
         """
         Resume an existing session.
@@ -214,6 +224,12 @@ class Session:
             tool_call_failed_list=tool_call_failed_list,
             custom_system_prompt=custom_system_prompt,
         )
+        if chat_provider is not None:
+            cli._runtime.llm = LLM(
+                chat_provider=chat_provider,
+                max_context_size=128000,
+                capabilities=set(),
+            )
         return Session(cli)
 
     @property
