@@ -14,7 +14,8 @@ from kimi_cli.config import Config
 from kimi_cli.llm import LLM
 from kimi_cli.session import Session as CliSession
 from kimi_cli.soul import StatusSnapshot
-from kimi_cli.wire.types import ContentPart, WireMessage
+from kimi_cli.safety_check import sanitize_for_tokenizer
+from kimi_cli.wire.types import ContentPart, TextPart, ThinkPart, WireMessage
 from kimi_cli.soul.agent import BuiltinSystemPromptArgs
 from kosong.chat_provider import ChatProvider
 from kosong.message import Message
@@ -69,6 +70,46 @@ class Session:
         self._cli = cli
         self._cancel_event: asyncio.Event | None = None
         self._closed = False
+        self._create_kwargs: dict[str, Any] = {}
+
+    async def clear(self) -> None:
+        """Clear the session by removing the context file and re-creating the CLI.
+
+        This cancels any ongoing prompt, cleans up tool resources, deletes the
+        session's ``context.jsonl`` file, and re-creates the underlying CLI with
+        the same session ID and original creation parameters.
+
+        Raises:
+            SessionStateError: When the session is closed.
+        """
+        if self._closed:
+            return
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+        await self._cleanup_tools()
+
+        work_dir = self._cli.session.work_dir
+        session_id = self._cli.session.id
+        context_file = self._cli.session.context_file
+        if context_file.exists():
+            context_file.unlink()
+
+        cli_session = await CliSession.create(work_dir, session_id)
+        kwargs = self._create_kwargs.copy()
+        kwargs.pop("resumed", None)
+        self._cli = await KimiCLI.create(cli_session, **kwargs)
+        self._cancel_event = None
+        self._closed = False
+
+    async def _cleanup_tools(self) -> None:
+        """Clean up tool resources without marking the session closed."""
+        toolset = getattr(self._cli.soul.agent, "toolset", None)
+        cleanup = getattr(toolset, "cleanup", None)
+        if cleanup is None:
+            return
+        result = cleanup()
+        if inspect.isawaitable(result):
+            await result
 
     @staticmethod
     async def create(
@@ -152,7 +193,24 @@ class Session:
             tool_call_failed_list=tool_call_failed_list,
             custom_system_prompt=custom_system_prompt,
         )
-        return Session(cli)
+        session = Session(cli)
+        session._create_kwargs = {
+            "config": config,
+            "model_name": model,
+            "thinking": thinking,
+            "llm": llm,
+            "yolo": yolo,
+            "plan_mode": plan_mode,
+            "agent_file": agent_file,
+            "mcp_configs": mcp_configs,
+            "skills_dirs": resolved_skills_dirs,
+            "max_steps_per_turn": max_steps_per_turn,
+            "max_retries_per_step": max_retries_per_step,
+            "max_ralph_iterations": max_ralph_iterations,
+            "tool_call_failed_list": tool_call_failed_list,
+            "custom_system_prompt": custom_system_prompt,
+        }
+        return session
 
     @staticmethod
     async def resume(
@@ -238,7 +296,24 @@ class Session:
             tool_call_failed_list=tool_call_failed_list,
             custom_system_prompt=custom_system_prompt,
         )
-        return Session(cli)
+        session = Session(cli)
+        session._create_kwargs = {
+            "config": config,
+            "model_name": model,
+            "thinking": thinking,
+            "llm": llm,
+            "yolo": yolo,
+            "plan_mode": plan_mode,
+            "agent_file": agent_file,
+            "mcp_configs": mcp_configs,
+            "skills_dirs": resolved_skills_dirs,
+            "max_steps_per_turn": max_steps_per_turn,
+            "max_retries_per_step": max_retries_per_step,
+            "max_ralph_iterations": max_ralph_iterations,
+            "tool_call_failed_list": tool_call_failed_list,
+            "custom_system_prompt": custom_system_prompt,
+        }
+        return session
 
     @property
     def id(self) -> str:
@@ -339,6 +414,28 @@ class Session:
         Note:
             Callers must handle ApprovalRequest manually unless yolo=True.
         """
+        if isinstance(user_input, str):
+            user_input = sanitize_for_tokenizer(user_input).strip()
+            if not user_input:
+                return
+        elif isinstance(user_input, list):
+            sanitized_parts: list[ContentPart] = []
+            for part in user_input:
+                if isinstance(part, TextPart):
+                    cleaned = sanitize_for_tokenizer(part.text).strip()
+                    if cleaned:
+                        part.text = cleaned
+                        sanitized_parts.append(part)
+                elif isinstance(part, ThinkPart):
+                    cleaned = sanitize_for_tokenizer(part.think).strip()
+                    if cleaned:
+                        part.think = cleaned
+                        sanitized_parts.append(part)
+                else:
+                    sanitized_parts.append(part)
+            user_input = sanitized_parts
+            if not user_input:
+                return
         if self._closed:
             raise SessionStateError("Session is closed")
         if self._cancel_event is not None:
@@ -377,13 +474,7 @@ class Session:
         self._closed = True
         if self._cancel_event is not None:
             self._cancel_event.set()
-        toolset = getattr(self._cli.soul.agent, "toolset", None)
-        cleanup = getattr(toolset, "cleanup", None)
-        if cleanup is None:
-            return
-        result = cleanup()
-        if inspect.isawaitable(result):
-            await result
+        await self._cleanup_tools()
 
     async def __aenter__(self) -> Session:
         """Async context manager entry."""
