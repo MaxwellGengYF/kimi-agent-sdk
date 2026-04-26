@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
+import aiofiles
 from kaos.path import KaosPath
 from kimi_cli.app import KimiCLI
 from kimi_cli.config import Config
@@ -15,6 +17,8 @@ from kimi_cli.soul import StatusSnapshot
 from kimi_cli.wire.types import ContentPart, WireMessage
 from kimi_cli.soul.agent import BuiltinSystemPromptArgs
 from kosong.chat_provider import ChatProvider
+from kosong.message import Message
+from pydantic import ValidationError
 
 from kimi_agent_sdk._exception import SessionStateError
 
@@ -43,6 +47,14 @@ def _resolve_skills_dirs(
         resolved.extend(skills_dirs)
 
     return resolved or None
+
+
+from kimi_cli.soul.context_records import (  # noqa: E402
+    CheckpointRecord,
+    ExportedContext,
+    SystemPromptRecord,
+    UsageRecord,
+)
 
 
 class Session:
@@ -242,6 +254,63 @@ class Session:
     def status(self) -> StatusSnapshot:
         """Current status snapshot (context usage, yolo state, etc.)."""
         return self._cli.soul.status
+
+    async def export(self) -> ExportedContext:
+        """Export all data from the session's context.jsonl file.
+
+        Returns:
+            ExportedContext: Structured representation of the context file.
+        """
+        cli_session = self._cli.session
+        if hasattr(cli_session, "export") and inspect.iscoroutinefunction(cli_session.export):
+            return await cli_session.export()
+
+        context_file: Path = cli_session.context_file
+        result = ExportedContext()
+
+        if not context_file.exists() or context_file.stat().st_size == 0:
+            return result
+
+        async with aiofiles.open(context_file, encoding="utf-8", errors="replace") as f:
+            async for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    line_json = json.loads(line, strict=False)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(line_json, dict):
+                    continue
+
+                role = line_json.get("role")
+                if not isinstance(role, str):
+                    continue
+                if role == "_system_prompt":
+                    try:
+                        record = SystemPromptRecord.model_validate(line_json)
+                        result.system_prompt = record.content
+                    except ValidationError:
+                        continue
+                elif role == "_usage":
+                    try:
+                        record = UsageRecord.model_validate(line_json)
+                        result.usages.append(record.token_count)
+                    except ValidationError:
+                        continue
+                elif role == "_checkpoint":
+                    try:
+                        record = CheckpointRecord.model_validate(line_json)
+                        result.checkpoints.append(record.id)
+                    except ValidationError:
+                        continue
+                else:
+                    try:
+                        message = Message.model_validate(line_json)
+                        result.messages.append(message)
+                    except ValidationError:
+                        continue
+
+        return result
 
     async def prompt(
         self,
