@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable
 
-import aiofiles
 from kaos.path import KaosPath
 from kimi_cli.app import KimiCLI
 from kimi_cli.config import Config
@@ -18,8 +16,6 @@ from kimi_cli.safety_check import sanitize_for_tokenizer
 from kimi_cli.wire.types import ContentPart, TextPart, ThinkPart, WireMessage
 from kimi_cli.soul.agent import BuiltinSystemPromptArgs
 from kosong.chat_provider import ChatProvider
-from kosong.message import Message
-from pydantic import ValidationError
 
 from kimi_agent_sdk._exception import SessionStateError
 
@@ -50,12 +46,7 @@ def _resolve_skills_dirs(
     return resolved or None
 
 
-from kimi_cli.soul.context_records import (  # noqa: E402
-    CheckpointRecord,
-    ExportedContext,
-    SystemPromptRecord,
-    UsageRecord,
-)
+from kimi_cli.soul.context_records import ExportedContext  # noqa: E402
 
 
 class Session:
@@ -100,6 +91,38 @@ class Session:
         self._cli = await KimiCLI.create(cli_session, **kwargs)
         self._cancel_event = None
         self._closed = False
+
+    async def compact(self, *, custom_instruction: str = "") -> None:
+        """Compact the session context.
+
+        This summarizes older conversation history into a condensed form,
+        reducing token usage while preserving recent messages and essential
+        context.
+
+        Args:
+            custom_instruction: Optional user instruction to guide the
+                compaction focus.
+
+        Raises:
+            SessionStateError: When the session is closed or already running.
+            LLMNotSet: When the LLM is not set.
+            ChatProviderError: When the chat provider returns an error.
+        """
+        if self._closed:
+            raise SessionStateError("Session is closed")
+        if self._cancel_event is not None:
+            raise SessionStateError("Session is already running")
+
+        from kimi_cli.soul import _current_wire
+        from kimi_cli.wire import Wire
+
+        wire = Wire()
+        token = _current_wire.set(wire)
+        try:
+            await self._cli.soul.compact_context(custom_instruction=custom_instruction)
+        finally:
+            _current_wire.reset(token)
+            wire.shutdown()
 
     async def _cleanup_tools(self) -> None:
         """Clean up tool resources without marking the session closed."""
@@ -330,61 +353,40 @@ class Session:
         """Current status snapshot (context usage, yolo state, etc.)."""
         return self._cli.soul.status
 
-    async def export(self) -> ExportedContext:
-        """Export all data from the session's context.jsonl file.
+    async def export(
+        self, output_path: str | Path | None = None
+    ) -> tuple[Path, int]:
+        """Export current session context to a markdown file.
+
+        Args:
+            output_path: Optional output file or directory path. If a directory,
+                a default filename is generated. If not provided, the file is
+                written to the session's work directory.
 
         Returns:
-            ExportedContext: Structured representation of the context file.
+            tuple[Path, int]: The output file path and the number of messages exported.
+
+        Raises:
+            SessionStateError: When the session is closed.
+            ValueError: When there are no messages to export or writing fails.
         """
-        cli_session = self._cli.session
-        if hasattr(cli_session, "export") and inspect.iscoroutinefunction(cli_session.export):
-            return await cli_session.export()
+        if self._closed:
+            raise SessionStateError("Session is closed")
 
-        context_file: Path = cli_session.context_file
-        result = ExportedContext()
+        from kimi_cli.utils.export import perform_export
 
-        if not context_file.exists() or context_file.stat().st_size == 0:
-            return result
-
-        async with aiofiles.open(context_file, encoding="utf-8", errors="replace") as f:
-            async for line in f:
-                if not line.strip():
-                    continue
-                try:
-                    line_json = json.loads(line, strict=False)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(line_json, dict):
-                    continue
-
-                role = line_json.get("role")
-                if not isinstance(role, str):
-                    continue
-                if role == "_system_prompt":
-                    try:
-                        record = SystemPromptRecord.model_validate(line_json)
-                        result.system_prompt = record.content
-                    except ValidationError:
-                        continue
-                elif role == "_usage":
-                    try:
-                        record = UsageRecord.model_validate(line_json)
-                        result.usages.append(record.token_count)
-                    except ValidationError:
-                        continue
-                elif role == "_checkpoint":
-                    try:
-                        record = CheckpointRecord.model_validate(line_json)
-                        result.checkpoints.append(record.id)
-                    except ValidationError:
-                        continue
-                else:
-                    try:
-                        message = Message.model_validate(line_json)
-                        result.messages.append(message)
-                    except ValidationError:
-                        continue
-
+        soul = self._cli.soul
+        session = self._cli.session
+        result = await perform_export(
+            history=list(soul.context.history),
+            session_id=session.id,
+            work_dir=str(session.work_dir),
+            token_count=soul.context.token_count,
+            args=str(output_path) if output_path else "",
+            default_dir=Path(str(session.work_dir)),
+        )
+        if isinstance(result, str):
+            raise ValueError(result)
         return result
 
     async def prompt(
