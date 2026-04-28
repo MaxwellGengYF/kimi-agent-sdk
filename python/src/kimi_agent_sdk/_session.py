@@ -155,9 +155,7 @@ class Session:
         max_steps_per_turn: int | None = None,
         max_retries_per_step: int | None = None,
         max_ralph_iterations: int | None = None,
-        tool_call_failed_list: list[tuple[str, str, str, str]]  | None = None, # Add by maxwell
-        custom_system_prompt : Callable[[BuiltinSystemPromptArgs], str] | None = None, # Add by maxwell
-        chat_provider: ChatProvider | None = None,
+        **custom_arguments # Add by maxwell
     ) -> Session:
         """
         Create a new Session instance.
@@ -197,6 +195,7 @@ class Session:
         resolved_skills_dirs = _resolve_skills_dirs(skills_dir, skills_dirs)
         cli_session = await CliSession.create(work_dir_path, session_id)
         llm: LLM | None = None
+        chat_provider: ChatProvider | None = custom_arguments.pop('chat_provider', None)
         if chat_provider is not None:
             llm = LLM(chat_provider, 0, set())
         cli = await KimiCLI.create(
@@ -213,8 +212,7 @@ class Session:
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
             max_ralph_iterations=max_ralph_iterations,
-            tool_call_failed_list=tool_call_failed_list,
-            custom_system_prompt=custom_system_prompt,
+            **custom_arguments
         )
         session = Session(cli)
         session._create_kwargs = {
@@ -230,9 +228,8 @@ class Session:
             "max_steps_per_turn": max_steps_per_turn,
             "max_retries_per_step": max_retries_per_step,
             "max_ralph_iterations": max_ralph_iterations,
-            "tool_call_failed_list": tool_call_failed_list,
-            "custom_system_prompt": custom_system_prompt,
         }
+        session._create_kwargs.update(custom_arguments)
         return session
 
     @staticmethod
@@ -256,9 +253,7 @@ class Session:
         max_steps_per_turn: int | None = None,
         max_retries_per_step: int | None = None,
         max_ralph_iterations: int | None = None,
-        tool_call_failed_list: list[tuple[str, str, str, str]]  | None = None, # Add by maxwell
-        custom_system_prompt : Callable[[BuiltinSystemPromptArgs], str] | None = None, # Add by maxwell
-        chat_provider: ChatProvider | None = None,
+        **custom_arguments # Add by maxwell
     ) -> Session | None:
         """
         Resume an existing session.
@@ -300,6 +295,7 @@ class Session:
         if cli_session is None:
             return None
         llm: LLM | None = None
+        chat_provider: ChatProvider | None = custom_arguments.pop('chat_provider', None)
         if chat_provider is not None:
             llm = LLM(chat_provider, 0, set())
         cli = await KimiCLI.create(
@@ -316,8 +312,7 @@ class Session:
             max_steps_per_turn=max_steps_per_turn,
             max_retries_per_step=max_retries_per_step,
             max_ralph_iterations=max_ralph_iterations,
-            tool_call_failed_list=tool_call_failed_list,
-            custom_system_prompt=custom_system_prompt,
+            **custom_arguments
         )
         session = Session(cli)
         session._create_kwargs = {
@@ -333,9 +328,8 @@ class Session:
             "max_steps_per_turn": max_steps_per_turn,
             "max_retries_per_step": max_retries_per_step,
             "max_ralph_iterations": max_ralph_iterations,
-            "tool_call_failed_list": tool_call_failed_list,
-            "custom_system_prompt": custom_system_prompt,
         }
+        session._create_kwargs.update(custom_arguments)
         return session
 
     @property
