@@ -347,6 +347,12 @@ class Session:
         """Current status snapshot (context usage, yolo state, etc.)."""
         return self._cli.soul.status
 
+    def get_custom_data(self) -> dict[str, Any] | None:
+        """Return the custom data dictionary from the underlying CLI session."""
+        if self._cli is not None and self._cli.session is not None:
+            return self._cli.session.get_custom_data()
+        return None
+
     async def export(
         self, output_path: str | Path | None = None
     ) -> tuple[Path, int]:
