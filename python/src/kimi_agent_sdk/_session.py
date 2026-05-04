@@ -63,7 +63,7 @@ class Session:
         self._closed = False
         self._create_kwargs: dict[str, Any] = {}
 
-    async def clear(self) -> None:
+    async def clear(self, **custom_arguments) -> None:
         """Clear the session by removing the context file and re-creating the CLI.
 
         This cancels any ongoing prompt, cleans up tool resources, deletes the
@@ -88,6 +88,7 @@ class Session:
         cli_session = await CliSession.create(work_dir, session_id)
         kwargs = self._create_kwargs.copy()
         kwargs.pop("resumed", None)
+        kwargs.update(custom_arguments)
         self._cli = await KimiCLI.create(cli_session, **kwargs)
         self._cancel_event = None
         self._closed = False
